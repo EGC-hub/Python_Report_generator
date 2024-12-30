@@ -1,6 +1,7 @@
 import mysql.connector
 from mysql.connector import Error
-from docx import Document
+import PyPDF2
+import re
 import os
 
 def connect_to_database(host, user, password, database):
@@ -21,24 +22,37 @@ def connect_to_database(host, user, password, database):
         print(f"Error connecting to MySQL: {e}")
         return None
 
-def extract_values_from_docx(docx_path):
+def extract_values_from_pdf(pdf_file_path):
     """
-    Extract key-value pairs from a filled Word (.docx) file.
+    Extract values from a PDF file using regex.
     """
-    data = {}
+    extracted_data = {}
     try:
-        doc = Document(docx_path)
-        for paragraph in doc.paragraphs:
-            text = paragraph.text.strip()
-            if ":" in text:  # Check for key-value pairs
-                key, value = text.split(":", 1)
-                key = key.strip()  # Clean up key
-                value = value.strip()  # Clean up value
-                data[key] = value
-        return data
+        with open(pdf_file_path, 'rb') as pdf_file:
+            reader = PyPDF2.PdfReader(pdf_file)
+            full_text = ""
+            for page in reader.pages:
+                full_text += page.extract_text()
+
+            # Log extracted text for debugging
+            print("Extracted Text from PDF:\n", full_text)
+
+            # Use regex patterns to extract values
+            extracted_data['Report Title'] = re.search(r"Report (\d+)", full_text).group(0)
+            extracted_data['Prepared by'] = re.search(r"Prepared by:\s*(.*)", full_text).group(1)
+            extracted_data['Date'] = re.search(r"Date:\s*(.*)", full_text).group(1)
+
+            # Extract Email, Phone, and Website fields
+            extracted_data['Email'] = re.search(r"Email:\s*(.*)", full_text).group(1)
+            extracted_data['Phone'] = re.search(r"Phone:\s*(.*)", full_text).group(1)
+            extracted_data['Website'] = re.search(r"Website:\s*(.*)", full_text).group(1)
+
+    except AttributeError as e:
+        print(f"Error extracting values from PDF: {e}. Check your regex patterns.")
     except Exception as e:
-        print(f"Error reading docx file: {e}")
-        return None
+        print(f"Unexpected error extracting values from PDF: {e}")
+
+    return extracted_data
 
 def insert_data_into_database(connection, data):
     """
@@ -58,12 +72,12 @@ def insert_data_into_database(connection, data):
         """
         # Map extracted data to database fields
         values = (
-            "N/A",                            # Placeholder for 'Report Title'
-            data.get("Prepared by", None),    # Maps to 'organization_name'
-            data.get("Date", None),           # Maps to 'report_date'
-            data.get("Email", "").replace("\n", " ").split("Phone:")[0].strip(),  # Extract email only
-            data.get("Email", "").split("Phone:")[1].split("\nWebsite:")[0].strip() if "Phone:" in data.get("Email", "") else None,  # Extract phone number
-            data.get("Email", "").split("Website:")[1].strip() if "Website:" in data.get("Email", "") else None  # Extract website
+            data.get("Report Title", "N/A"),   # Map 'Report Title'
+            data.get("Prepared by", None),    # Map 'Prepared by' to 'organization_name'
+            data.get("Date", None),           # Map 'Date' to 'report_date'
+            data.get("Email", None),          # Map 'Email' to 'email_address'
+            data.get("Phone", None),          # Map 'Phone' to 'phone_number'
+            data.get("Website", None)         # Map 'Website' to 'website'
         )
         
         # Log the mapped values for debugging
@@ -88,18 +102,17 @@ if __name__ == "__main__":
         "database": "python_database"
     }
 
-    # File path
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    docx_file_path = os.path.join(base_dir, "filled_v2.docx")  # Replace with your filled report filename
+    # File path to the PDF
+    pdf_file_path = "filled_v2.pdf"  # Replace with your file path
 
     # Step 1: Connect to the database
     connection = connect_to_database(**db_config)
 
     if connection:
-        # Step 2: Extract values from the Word document
-        extracted_data = extract_values_from_docx(docx_file_path)
+        # Step 2: Extract values from the PDF
+        extracted_data = extract_values_from_pdf(pdf_file_path)
         if extracted_data:
-            print("Extracted Data:", extracted_data)
+            print("Extracted Data from PDF:", extracted_data)
 
             # Step 3: Insert data into the database
             insert_data_into_database(connection, extracted_data)
