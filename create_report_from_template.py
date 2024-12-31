@@ -47,11 +47,12 @@ if __name__ == '__main__':
 
     # Get absolute paths
     base_dir = os.path.dirname(os.path.abspath(__file__))
+    reports_dir = os.path.join(base_dir, 'Reports')
     template_path = os.path.join(base_dir, 'template.docx')
 
     # Generate versioned filenames in the current directory
-    word_output_path = get_versioned_filename("filled", "docx", base_dir)
-    pdf_output_path = get_versioned_filename("filled", "pdf", base_dir)
+    word_output_path = get_versioned_filename("filled", "docx", reports_dir)
+    pdf_output_path = get_versioned_filename("filled", "pdf", reports_dir)
 
     # Process and generate the outputs
     replace_placeholders(template_path, word_output_path, data)

@@ -103,7 +103,7 @@ if __name__ == "__main__":
     }
 
     # File path to the PDF
-    pdf_file_path = "filled_v2.pdf"  # Replace with your file path
+    pdf_file_path = "Reports/filled_v2.pdf"  # Replace with your file path
 
     # Step 1: Connect to the database
     connection = connect_to_database(**db_config)
