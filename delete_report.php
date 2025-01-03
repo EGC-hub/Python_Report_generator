@@ -1,65 +1,62 @@
 <?php
-session_start(); // Start session to manage admin login (placeholder)
+// Database connection settings
+$host = 'localhost';
+$dbname = 'python_database';
+$username = 'root';
+$password = '';
 
-// Check if admin is logged in
-if (!isset($_SESSION['admin_name'])) {
-    echo json_encode(["status" => "error", "message" => "You are not logged in as admin."]);
-    exit;
-}
-
-$reportsDir = 'reports';
+// Path to the uploads and archive directories
+$uploadsDir = 'reports';
 $archiveDir = 'archive';
+
+// Ensure the archive directory exists
 if (!is_dir($archiveDir)) {
-    mkdir($archiveDir, 0777, true); // Create archive directory if not exists
+    mkdir($archiveDir, 0777, true);
 }
 
-// Validate input
-if (!isset($_POST['file']) || !isset($_POST['reason'])) {
-    echo json_encode(["status" => "error", "message" => "Invalid input."]);
-    exit;
+// Establish a database connection
+try {
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e) {
+    die("Database connection failed: " . $e->getMessage());
 }
 
-$fileName = $_POST['file'];
-$reason = $_POST['reason'];
-$timestamp = date("Y-m-d H:i:s");
-$adminName = $_SESSION['admin_name']; // Placeholder for admin name
+// Check if the form was submitted
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $reportName = $_POST['reportName'] ?? '';
+    $deleteReason = $_POST['deleteReason'] ?? '';
 
-$filePath = $reportsDir . DIRECTORY_SEPARATOR . $fileName;
-$archivePath = $archiveDir . DIRECTORY_SEPARATOR . $fileName;
+    if ($reportName && $deleteReason) {
+        $reportPath = $uploadsDir . '/' . $reportName;
+        $archivePath = $archiveDir . '/' . $reportName;
 
-// Check if file exists
-if (!file_exists($filePath)) {
-    echo json_encode(["status" => "error", "message" => "File not found."]);
-    exit;
-}
+        // Check if the file exists
+        if (file_exists($reportPath)) {
+            // Move the file to the archive folder
+            if (rename($reportPath, $archivePath)) {
+                // Prepare the SQL query to insert deletion metadata
+                $sql = "INSERT INTO deletions (report_name, deleted_at, reason) VALUES (:report_name, :deleted_at, :reason)";
+                $stmt = $pdo->prepare($sql);
 
-// Archive the file and log metadata
-if (rename($filePath, $archivePath)) {
-    // Prepare log entry
-    $logEntry = [
-        "file" => $fileName,
-        "admin" => $adminName,
-        "timestamp" => $timestamp,
-        "reason" => $reason
-    ];
+                // Bind parameters and execute the query
+                $stmt->execute([
+                    ':report_name' => $reportName,
+                    ':deleted_at' => date('Y-m-d H:i:s'),
+                    ':reason' => $deleteReason
+                ]);
 
-    // Log file path
-    $logFilePath = $archiveDir . DIRECTORY_SEPARATOR . "log.json";
-
-    // Read existing log data
-    $existingLogs = [];
-    if (file_exists($logFilePath)) {
-        $existingLogs = json_decode(file_get_contents($logFilePath), true);
+                echo "<script>alert('Report deleted and archived successfully.'); window.location.href = 'index.php';</script>";
+            } else {
+                echo "<script>alert('Failed to archive the report.'); window.location.href = 'index.php';</script>";
+            }
+        } else {
+            echo "<script>alert('Report not found.'); window.location.href = 'index.php';</script>";
+        }
+    } else {
+        echo "<script>alert('Invalid input.'); window.location.href = 'index.php';</script>";
     }
-
-    // Append new log entry
-    $existingLogs[] = $logEntry;
-
-    // Write updated log data back to the file
-    file_put_contents($logFilePath, json_encode($existingLogs, JSON_PRETTY_PRINT));
-
-    echo json_encode(["status" => "success", "message" => "File archived successfully."]);
 } else {
-    echo json_encode(["status" => "error", "message" => "Failed to archive file."]);
+    echo "<script>alert('Invalid request method.'); window.location.href = 'index.php';</script>";
 }
 ?>
