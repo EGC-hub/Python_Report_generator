@@ -3,6 +3,7 @@ from docx import Document
 import os
 import mysql.connector
 from datetime import datetime
+import re
 
 def get_versioned_filename(base_name, extension, directory):
     """Generate a filename with an incremented version number in the specified directory."""
@@ -15,7 +16,7 @@ def get_versioned_filename(base_name, extension, directory):
         counter += 1
 
 def replace_placeholders(doc_path, output_path, data):
-    """Replace placeholders in the Word document with dynamic data."""
+    """Replace placeholders in the Word document with dynamic data using regex."""
     if not os.path.exists(doc_path):
         print(f"Template file not found at: {doc_path}")
         exit(1)
@@ -26,12 +27,18 @@ def replace_placeholders(doc_path, output_path, data):
     for i, paragraph in enumerate(doc.paragraphs):
         print(f"Paragraph {i}: {paragraph.text}")
 
+    # Compile a regex pattern to match placeholders
+    placeholder_pattern = re.compile(r"\{\{.*?\}\}")
+
     # Replace placeholders in paragraphs
     for paragraph in doc.paragraphs:
-        for key, value in data.items():
-            if key in paragraph.text:
-                print(f"Replacing {key} with {value}")
-                paragraph.text = paragraph.text.replace(key, value)
+        # Find all placeholders in the paragraph
+        matches = placeholder_pattern.findall(paragraph.text)
+        for match in matches:
+            if match in data:
+                print(f"Replacing {match} with {data[match]}")
+                # Replace the placeholder with the corresponding value
+                paragraph.text = paragraph.text.replace(match, str(data[match]))
 
     # Save the updated Word document
     doc.save(output_path)
